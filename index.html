@@ -36,7 +36,6 @@
       display: inline-block;
       vertical-align: middle;
     }
-
     .extra-info {
       background-color: #292929;
       padding: 10px 15px;
@@ -44,7 +43,6 @@
       margin-bottom: 10px;
       display: none;
     }
-
     .extra-info ul {
       list-style: none;
       padding-left: 0;
@@ -53,7 +51,6 @@
     .extra-info ul li {
       margin: 4px 0;
     }
-
     .expand-button {
       margin-left: auto;
       color: #4fc3f7;
@@ -64,73 +61,79 @@
   <h1>🌐 Citizen IV Masterlist</h1>
   <div id="serverList"></div>
 
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script>
     const API_URL = "https://6878dab263f24f1fdc9fbc8d.mockapi.io/api/list/masterlist";
 
     async function fetchServers() {
-      const container = document.getElementById("serverList");
-      container.innerHTML = "<p>Loading servers...</p>";
+      const container = $("#serverList");
+      container.html("<p>Loading servers...</p>");
 
       try {
-        const servers = await fetch(API_URL).then(res => res.json());
-        container.innerHTML = "";
+        const servers = await $.getJSON(API_URL);
+        container.html("");
 
-        for (const server of servers) {
+        servers.forEach(server => {
           const [ip, port] = server.addr.split(":");
           const baseURL = `http://${ip}:${port}`;
-          let serverName = server.name;
-          let players = [];
-          let maxPlayers = 32;
-          let gameType = "Unknown";
-          let iconUrl = `${baseURL}/icon`;
-          let website = null;
+          const iconUrl = `${baseURL}/icon`;
 
-          try {
-            const info = await fetch(`${baseURL}/info`).then(res => res.json());
-            if (info?.server) {
-              serverName = info.server.hostname || server.name;
-              players = info.server.players || [];
-              gameType = info.server.gametype || "freeroam";
-              website = info.server.website || null;
-            }
-          } catch (err) {
-            console.warn(`Couldn't get info for ${server.addr}`);
-          }
-
-          // Main server box
-          const box = document.createElement("div");
-          box.className = "server-box";
-          box.innerHTML = `
-            <img src="${iconUrl}" class="server-icon" onerror="this.style.display='none';" />
-            <div class="server-details">
-              <div><strong>${serverName}</strong> — ${server.addr}</div>
-              <div>👥 Players: ${players.length} / ${maxPlayers}</div>
-              <div>🎮 Mode: ${gameType}</div>
+          const box = $(`
+            <div class="server-box">
+              <img src="${iconUrl}" class="server-icon" onerror="this.style.display='none';" />
+              <div class="server-details">
+                <div><strong>${server.name}</strong> — ${server.addr}</div>
+                <div class="player-count">👥 Players: loading...</div>
+                <div class="game-type">🎮 Mode: ...</div>
+              </div>
+              <span class="expand-button">▼</span>
             </div>
-            <span class="expand-button">▼</span>
-          `;
+          `);
 
-          // Extra info section
-          const extra = document.createElement("div");
-          extra.className = "extra-info";
-          extra.innerHTML = `
-            ${players.length > 0
-              ? `<strong>Connected Players:</strong><ul>${players.map(p => `<li>${p.name}</li>`).join("")}</ul>`
-              : "<i>No players online</i>"}
-            ${website ? `<a href="${website}" target="_blank">🌐 Visit Website</a><br/>` : ""}
-            <button disabled style="margin-top: 5px;">🔗 Connect (coming soon)</button>
-          `;
+          const extra = $(`
+            <div class="extra-info">
+              <div class="players">Loading players...</div>
+              <div class="website"></div>
+              <button disabled style="margin-top: 5px;">🔗 Connect (coming soon)</button>
+            </div>
+          `);
 
-          // Toggle logic
-          box.addEventListener("click", () => {
-            extra.style.display = extra.style.display === "block" ? "none" : "block";
+          // Try to get /info
+          $.getJSON(`${baseURL}/info`, function (info) {
+            if (info.server) {
+              const serverName = info.server.hostname || server.name;
+              const players = info.server.players || [];
+              const gameType = info.server.gametype || "freeroam";
+              const website = info.server.website || null;
+
+              box.find(".server-details strong").text(serverName);
+              box.find(".player-count").text(`👥 Players: ${players.length} / 32`);
+              box.find(".game-type").text(`🎮 Mode: ${gameType}`);
+
+              const playerList = players.length > 0
+                ? `<strong>Connected Players:</strong><ul>${players.map(p => `<li>${p.name} <small style="color:#aaa;">(${p.ping}ms)</small></li>`).join("")}</ul>`
+                : "<i>No players online</i>";
+
+              extra.find(".players").html(playerList);
+              if (website) {
+                extra.find(".website").html(`<br/><a href="${website}" target="_blank">🌐 Visit Website</a>`);
+              }
+            }
+          }).fail(() => {
+            box.find(".player-count").text("👥 Players: Offline");
+            extra.find(".players").html("<i>Server offline</i>");
           });
 
-          container.appendChild(box);
-          container.appendChild(extra); // put below each server box
-        }
+          // Click toggle
+          box.on("click", () => {
+            extra.slideToggle(150);
+          });
+
+          container.append(box);
+          container.append(extra);
+        });
       } catch (err) {
-        container.innerHTML = "<p>Failed to load servers.</p>";
+        container.html("<p>Failed to load servers. Please check the API URL.</p>");
         console.error(err);
       }
     }
