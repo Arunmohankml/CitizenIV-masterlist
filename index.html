@@ -9,113 +9,132 @@
       font-family: Arial, sans-serif;
       background-color: #121212;
       color: #ffffff;
-      margin: 0;
       padding: 20px;
     }
     h1 {
       text-align: center;
-      margin-bottom: 30px;
-    }
-    #serverList {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-top: 20px;
     }
     .server-box {
       background-color: #1e1e1e;
       border-left: 4px solid #4fc3f7;
-      padding: 10px 15px;
+      padding: 15px;
       border-radius: 5px;
-    }
-    .server-box span {
-      font-size: 1.1em;
-    }
-    #addForm {
-      margin-top: 40px;
-      background-color: #1c1c1c;
-      padding: 20px;
-      border-radius: 6px;
-    }
-    #addForm input {
-      padding: 10px;
-      margin-right: 10px;
-      margin-bottom: 10px;
-      border: none;
-      border-radius: 4px;
-    }
-    #addForm button {
-      padding: 10px 20px;
-      background-color: #4fc3f7;
-      border: none;
-      border-radius: 4px;
-      color: #000;
-      font-weight: bold;
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
       cursor: pointer;
     }
-    #addForm button:hover {
-      background-color: #29b6f6;
+    .server-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 4px;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+    .server-details {
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .extra-info {
+      background-color: #292929;
+      padding: 10px 15px;
+      border-radius: 0 0 5px 5px;
+      margin-bottom: 10px;
+      display: none;
+    }
+
+    .extra-info ul {
+      list-style: none;
+      padding-left: 0;
+      margin-top: 5px;
+    }
+    .extra-info ul li {
+      margin: 4px 0;
+    }
+
+    .expand-button {
+      margin-left: auto;
+      color: #4fc3f7;
     }
   </style>
 </head>
 <body>
   <h1>🌐 Citizen IV Masterlist</h1>
-
-  <div id="serverList">
-    <!-- Servers will appear here -->
-  </div>
-
-  <div id="addForm">
-    <h2>Add Your Server</h2>
-    <input type="text" id="serverName" placeholder="Server Name" required />
-    <input type="text" id="serverAddr" placeholder="IP:Port" required />
-    <button onclick="addServer()">Add Server</button>
-  </div>
+  <div id="serverList"></div>
 
   <script>
-    const API_URL = 'https://6878dab263f24f1fdc9fbc8d.mockapi.io/api/list/masterlist';
+    const API_URL = "https://6878dab263f24f1fdc9fbc8d.mockapi.io/api/list/masterlist";
 
-    // Fetch & display servers
-    function fetchServers() {
-      fetch(API_URL)
-        .then(res => res.json())
-        .then(servers => {
-          const container = document.getElementById("serverList");
-          container.innerHTML = "";
-          servers.forEach(server => {
-            const box = document.createElement("div");
-            box.className = "server-box";
-            box.innerHTML = `<span>🔹 <strong>${server.name}</strong> — ${server.addr}</span>`;
-            container.appendChild(box);
+    async function fetchServers() {
+      const container = document.getElementById("serverList");
+      container.innerHTML = "<p>Loading servers...</p>";
+
+      try {
+        const servers = await fetch(API_URL).then(res => res.json());
+        container.innerHTML = "";
+
+        for (const server of servers) {
+          const [ip, port] = server.addr.split(":");
+          const baseURL = `http://${ip}:${port}`;
+          let serverName = server.name;
+          let players = [];
+          let maxPlayers = 32;
+          let gameType = "Unknown";
+          let iconUrl = `${baseURL}/icon`;
+          let website = null;
+
+          try {
+            const info = await fetch(`${baseURL}/info`).then(res => res.json());
+            if (info?.server) {
+              serverName = info.server.hostname || server.name;
+              players = info.server.players || [];
+              gameType = info.server.gametype || "freeroam";
+              website = info.server.website || null;
+            }
+          } catch (err) {
+            console.warn(`Couldn't get info for ${server.addr}`);
+          }
+
+          // Main server box
+          const box = document.createElement("div");
+          box.className = "server-box";
+          box.innerHTML = `
+            <img src="${iconUrl}" class="server-icon" onerror="this.style.display='none';" />
+            <div class="server-details">
+              <div><strong>${serverName}</strong> — ${server.addr}</div>
+              <div>👥 Players: ${players.length} / ${maxPlayers}</div>
+              <div>🎮 Mode: ${gameType}</div>
+            </div>
+            <span class="expand-button">▼</span>
+          `;
+
+          // Extra info section
+          const extra = document.createElement("div");
+          extra.className = "extra-info";
+          extra.innerHTML = `
+            ${players.length > 0
+              ? `<strong>Connected Players:</strong><ul>${players.map(p => `<li>${p.name}</li>`).join("")}</ul>`
+              : "<i>No players online</i>"}
+            ${website ? `<a href="${website}" target="_blank">🌐 Visit Website</a><br/>` : ""}
+            <button disabled style="margin-top: 5px;">🔗 Connect (coming soon)</button>
+          `;
+
+          // Toggle logic
+          box.addEventListener("click", () => {
+            extra.style.display = extra.style.display === "block" ? "none" : "block";
           });
-        });
+
+          container.appendChild(box);
+          container.appendChild(extra); // put below each server box
+        }
+      } catch (err) {
+        container.innerHTML = "<p>Failed to load servers.</p>";
+        console.error(err);
+      }
     }
 
-    // Add new server
-    function addServer() {
-      const name = document.getElementById("serverName").value.trim();
-      const addr = document.getElementById("serverAddr").value.trim();
-
-      if (!name || !addr) return alert("Please fill in both fields.");
-
-      fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, addr })
-      })
-        .then(res => res.json())
-        .then(() => {
-          document.getElementById("serverName").value = "";
-          document.getElementById("serverAddr").value = "";
-          fetchServers(); // refresh list
-        })
-        .catch(err => {
-          console.error("Error adding server:", err);
-          alert("Failed to add server.");
-        });
-    }
-
-    // Initial load
     fetchServers();
   </script>
 </body>
